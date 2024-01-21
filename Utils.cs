@@ -16,7 +16,6 @@ using System.Net.Sockets;
 using Newtonsoft.Json;
 using LibGit2Sharp;
 using System.Runtime.InteropServices;
-using static SystemPlus.Extensions.ConsoleExtensions;
 using System.Diagnostics;
 
 namespace ProjectEarthLauncher
@@ -341,7 +340,11 @@ namespace ProjectEarthLauncher
             if (result != 0)
                 throw new Exception($"Move operation failed. Error code: {result}");
 #else
-            throw dont compile
+            foreach (string dir in Directory.EnumerateDirectories(from))
+                Directory.Move(dir, Path.Combine(to, Path.GetFileName(dir)));
+
+            foreach (string file in Directory.EnumerateFiles(from))
+                File.Move(file, Path.Combine(to, Path.GetFileName(file)));
 #endif
         }
 

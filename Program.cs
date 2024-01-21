@@ -13,6 +13,8 @@ namespace ProjectEarthLauncher
      */
     internal static class Program
     {
+        public const string Version = "2.0.0";
+
 #if WINDOWS
         [STAThread]
 #endif
@@ -23,7 +25,7 @@ namespace ProjectEarthLauncher
             while (true)
             {
                 prepScreen();
-                Menu menu = new Menu(GeneralExtensions.ToBIG("ProjectEarth Launcher 2.0"), new string[] { "Start", "Install", "Exit" });
+                Menu menu = new Menu(GeneralExtensions.ToBIG("ProjectEarth Launcher 2.0"), new string[] { "Start", "Install", "About", "Exit" });
                 int selected = menu.Show(Vector2Int.Up);
 
                 prepScreen();
@@ -45,6 +47,16 @@ namespace ProjectEarthLauncher
                             Console.Clear();
                             Installer.Install((bool)settings.lastValues[0].GetValue(), (bool)settings.lastValues[1].GetValue(), (bool)settings.lastValues[2].GetValue());
                         }
+                        break;
+                    case 2:
+                        Console.Clear();
+                        Console.WriteLine($"ProjectEarth Launcher, Version: {Version}");
+                        Console.WriteLine("Contacts:");
+                        Console.WriteLine(" -Discord: bitcodercz");
+                        Console.WriteLine("Made possible by:");
+                        Console.WriteLine(" -Project Earth Team - https://github.com/Project-Earth-Team");
+                        Console.WriteLine(" -Jackcaver (Api, ApiData) - https://github.com/jackcaver");
+                        Logger.PAKC();
                         break;
                     default:
                         return;
