@@ -249,7 +249,7 @@ namespace ProjectEarthLauncher
                 }
             }
 
-            int port = 80;
+            ushort port = 80;
             if (Input.YN("Do you want to change port (default is 80)", false))
             {
             getPort:

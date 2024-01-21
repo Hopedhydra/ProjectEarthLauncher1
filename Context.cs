@@ -7,13 +7,15 @@ using System.Threading.Tasks;
 
 namespace ProjectEarthLauncher
 {
-    internal class InstalationContext
+    internal class Context
     {
         public Installer.Config Config;
 
         public IPEndPoint Ip { get; private set; }
         public string InstallDir { get; private set; }
         public string ApiDir { get; private set; }
+        public string CloudburstDir { get; private set; }
+        public string TileServerDir { get; private set; }
         /// <summary>
         /// 0 - ask
         /// <br>1 - overwrite, don't ask</br>
@@ -21,12 +23,14 @@ namespace ProjectEarthLauncher
         /// </summary>
         private int fileExistsAction;
 
-        public InstalationContext(Installer.Config _config, string _installDir, IPEndPoint _ip)
+        public Context(Installer.Config _config, string _installDir, IPEndPoint _ip)
         {
             Config = _config;
 
             InstallDir = _installDir;
             ApiDir = Path.Combine(InstallDir, "Api");
+            CloudburstDir = Path.Combine(InstallDir, "Cloudburst");
+            TileServerDir = Path.Combine(InstallDir, "TileServer");
 
             Ip = _ip;
         }
@@ -124,7 +128,7 @@ namespace ProjectEarthLauncher
 
             dirs.Sort();
 
-            return dirs.Last();
+            return dirs.Last(); // return the one with highest .net version
         }
     }
 }

@@ -1,21 +1,25 @@
 ﻿using Newtonsoft.Json;
 using Newtonsoft.Json.Linq;
+using ProjectEarthLauncher.FileTypes;
 using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Globalization;
 using System.Linq;
+using System.Net;
 using System.Reflection;
+using System.Security.Policy;
 using System.Text;
 using System.Threading.Tasks;
+using static System.Net.Mime.MediaTypeNames;
+using static System.Runtime.InteropServices.JavaScript.JSType;
 
 namespace ProjectEarthLauncher
 {
-    internal class Installer
+    internal static class Installer
     {
-        public void Install(bool api, bool cloudburst, bool tileServer)
+        public static void Install(bool api, bool cloudburst, bool tileServer)
         {
-            CultureInfo.DefaultThreadCurrentCulture = new CultureInfo("en-US");
             if (CultureInfo.CurrentUICulture.ThreeLetterISOLanguageName != "eng")
             {
                 Logger.Warning("Your current ui language isn't english, this might cause problems");
@@ -41,18 +45,23 @@ namespace ProjectEarthLauncher
 
                 Config config = JsonConvert.DeserializeObject<Config>(File.ReadAllText(configPath));
 
-                InstalationContext context = new InstalationContext(config, installDir, Utils.GetLocalIP());
+                Context context = new Context(config, installDir, api || cloudburst ? Utils.GetLocalIP() : null);
 
-                if (api) installApi(context);
+                if (api && !installApi(context)) return;
+                if (cloudburst && !installCloudburst(context)) return;
+                if (tileServer && !installTileServer(context)) return;
             } catch (Exception ex)
             {
                 Logger.Info($"There was an exception during installation:");
                 Logger.Exception(ex);
                 Logger.PAKC();
+                return;
             }
+
+            Logger.PAKC("Installed");
         }
 
-        private bool installApi(InstalationContext context)
+        private static bool installApi(Context context)
         {
             Logger.Info("**********Installing Api**********");
 
@@ -143,21 +152,183 @@ namespace ProjectEarthLauncher
                 });
 
                 // wait max 90s
-                process.WaitForExit(90 * 1000);
-                process.Close();
+                if (!process.WaitForExit(90 * 1000))
+                    process.Kill(true);
+                process.Dispose();
 
                 if (!gotBuildSucceeded)
                 {
                     Logger.PAKC($"Failed to build api");
                     return false;
                 }
+                else
+                    Logger.Info("Build Api");
 
                 Logger.Debug("Copying data folder...");
                 Utils.CopyDir(dataPath, Path.Combine(context.Api_BuildPath(), "data"));
                 Logger.Debug("Copied data folder", true);
             }
 
-            Logger.PAKC("Api installed");
+            Logger.Info("**********Api installed**********");
+            return true;
+        }
+
+        private static bool installCloudburst(Context context)
+        {
+            Logger.Info("**********Installing Cloudburst**********");
+
+            Directory.CreateDirectory(context.CloudburstDir);
+
+            string cloudburstJarPath = Path.Combine(context.CloudburstDir, "cloudburst.jar");
+        downloadCloudburst:
+            context.DownloadFile("https://ci.rtm516.co.uk/job/ProjectEarth/job/Server/job/earth-inventory/lastSuccessfulBuild/artifact/target/Cloudburst.jar", cloudburstJarPath, "Cloudburst");
+
+            if (!new FileInfo(cloudburstJarPath).Exists || new FileInfo(cloudburstJarPath).Length < 15000 * 1024)
+            {
+                if (Input.YN("Failed to download Cloudburst, do you want to try again", true))
+                {
+                    File.Delete(cloudburstJarPath);
+                    goto downloadCloudburst;
+                }
+                else
+                {
+                    File.Delete(cloudburstJarPath);
+                    return false;
+                }
+            }
+
+            string runScriptPath = Path.Combine(context.CloudburstDir, "run.bat");
+            context.WriteAllText(runScriptPath, "java -jar cloudburst.jar");
+
+            // setup files
+            Logger.Debug("Running Cloudburst to generate file structure...");
+            string runScript = File.ReadAllText(runScriptPath);
+            Logger.Info($"Running: {runScript}");
+            Process process = Utils.RunCommand(runScript, context.CloudburstDir, true, (string text, bool isError) =>
+            {
+                Logger.Debug($"[{(isError ? "err" : "out")}] {text}");
+            });
+
+            // select language
+            process.StandardInput.WriteLine("en_US");
+
+            // wait max 60s
+            if (!process.WaitForExit(60 * 1000))
+                process.Kill(true);
+            process.Dispose();
+
+            if (!Directory.Exists(Path.Combine(context.CloudburstDir, "plugins")) || !File.Exists(Path.Combine(context.CloudburstDir, "cloudburst.yml")))
+            {
+                Logger.PAKC("Failed to generate cloudburst files, make sure you have right java version");
+                return false;
+            }
+            Logger.Debug("Generated Cloudburst file structure");
+
+            context.DownloadFile("https://www.googleapis.com/drive/v3/files/1DIX9pT7B460iPd8tWysi4KQCxQqwQNL8?alt=media&key=AIzaSyAA9ERw-9LZVEohRYtCWka_TQc6oXmvcVU&supportsAllDrives=True", Path.Combine(context.CloudburstDir, "plugins", "GenoaPlugin.jar"), "GenoaPlugin");
+            context.DownloadFile("https://www.googleapis.com/drive/v3/files/1m6PrdPTAl6k4k36pq44Lw-U-hDhixPwk?alt=media&key=AIzaSyAA9ERw-9LZVEohRYtCWka_TQc6oXmvcVU&supportsAllDrives=True", Path.Combine(context.CloudburstDir, "plugins", "ZGenoaAllocatorPlugin.jar"), "GenoaAllocatorPlugin");
+
+            Directory.CreateDirectory(Path.Combine(context.CloudburstDir, "plugins", "GenoaAllocatorPlugin"));
+            context.WriteAllText(Path.Combine(context.CloudburstDir, "plugins", "GenoaAllocatorPlugin", "key.txt"),
+                    "/g1xCS33QYGC+F2s016WXaQWT8ICnzJvdqcVltNtWljrkCyjd5Ut4tvy2d/IgNga0uniZxv/t0hELdZmvx+cdA==");
+            Logger.Debug("Created key.txt");
+            context.WriteAllText(Path.Combine(context.CloudburstDir, "plugins", "GenoaAllocatorPlugin", "ip.txt"),
+                context.Ip.Address.ToString());
+            Logger.Debug("Created ip.txt");
+
+            // edit cloudburst.yml
+            YamlFile cloudburstYml = new YamlFile(Path.Join(context.CloudburstDir, "cloudburst.yml"));
+            cloudburstYml.Obj["settings"]["earth-api"] = $"{context.Ip}/1/api";
+            Dictionary<object, object> Settings = cloudburstYml.Obj["worlds"]["world"] as Dictionary<object, object>;
+            Settings["generator"] = "genoa:void";
+            cloudburstYml.Obj["worlds"]["world"] = Settings;
+            Settings = cloudburstYml.Obj["worlds"]["nether"] as Dictionary<object, object>;
+            Settings["generator"] = "genoa:void";
+            cloudburstYml.Obj["worlds"]["nether"] = Settings;
+            cloudburstYml.Save();
+            Logger.Debug("Edited Cloudburst.yml");
+
+            // edit server.properties
+            LBLFile serverProps = new LBLFile(Path.Combine(context.CloudburstDir, "server.properties"), '=');
+            serverProps["server-ip"] = context.Ip.Address.ToString();
+            serverProps["spawn-protection"] = "0";
+            serverProps["gamemode"] = "1";
+            serverProps["allow-nether"] = "true";
+            serverProps["xbox-auth"] = "false";
+            serverProps.Save();
+            Logger.Debug("Edited server.properties");
+
+            Logger.Info("**********Cloudburst installed**********");
+            return true;
+        }
+
+        private static bool installTileServer(Context context)
+        {
+            Logger.Info("**********Installing TileServer**********");
+
+#if WINDOWS
+            Logger.Info("It's recommended that you install wsl update: https://wslstorestorage.blob.core.windows.net/wslblob/wsl_update_x64.msi");
+#endif
+            Logger.Info("If you don't have docker installed, you can download it here: https://docs.docker.com/get-docker/");
+#if WINDOWS
+            Logger.Info("After you install docker go to the config file at C:\\Users\\<username>\\AppData\\Roaming\\Docker\\settings.json, and set \"wslEngineEnabled\": true");
+#endif
+            Logger.Info("After that, restart your system");
+            Logger.PAKC();
+
+            // make sure dir is empty, bc tile server is git repo
+            if (Directory.Exists(context.TileServerDir) && (Directory.GetFiles(context.TileServerDir).Length > 0 || Directory.GetDirectories(context.TileServerDir).Length > 0))
+            {
+                Logger.PAKC($"All files in \"{context.TileServerDir}\" will be deleted");
+                Utils.DeleteDirectory(context.TileServerDir);
+            }
+
+            Directory.CreateDirectory(context.TileServerDir);
+
+            Utils.DownloadGitRepo("https://github.com/SuperMatejCZ/TileServer.git", context.TileServerDir, "TileServer");
+
+            // tile server config
+            string tsConfigPath = Path.Combine(context.TileServerDir, "config.json");
+            JObject tsConfig = JObject.Parse(File.ReadAllText(tsConfigPath));
+            tsConfig["styles"]["mc-earth"]["mc-earth"] = true;
+            tsConfig["options"]["domains"] = JArray.FromObject(new string[] { "127.0.0.1" });
+            File.WriteAllText(tsConfigPath, tsConfig.ToString());
+            Logger.Debug("Edited config.json");
+
+            // get port
+            ushort tsPort = 8080;
+            if (Input.YN("Do you want to change port, that tileServer will be running on (default is 8080)", false))
+            {
+            getPort:
+                string read = Input.String("Server's port (0 - 65535)"); // ushort.MaxValue
+                if (ushort.TryParse(read, out ushort _port))
+                    tsPort = _port;
+                else
+                {
+                    Logger.Info("Couldn't parse ip, make sure it's in range");
+                    goto getPort;
+                }
+            }
+
+            // api config
+            bool isRelease = context.Api_IsRelease();
+            string dataPath = isRelease ? Path.Combine(context.ApiDir, "data") : Path.Combine(context.ApiDir, "ProjectEarthServerAPI", "data");
+
+            editApi(Path.Combine(dataPath, "config", "apiconfig.json"));
+            if (!isRelease)
+                editApi(Path.Combine(context.Api_BuildPath(), "data", "config", "apiconfig.json"));
+
+            void editApi(string path)
+            {
+                JObject apiConfig = JObject.Parse(File.ReadAllText(path));
+                apiConfig["tileServerUrl"] = $"http://127.0.0.1:{tsPort}";
+                File.WriteAllText(path, apiConfig.ToString());
+            }
+            Logger.Debug("Edited apiConfig(s)");
+
+            context.WriteAllText(Path.Combine(context.TileServerDir, "start.bat"), $"docker run --rm -it -v \"{context.TileServerDir}\\:\"/data -p {tsPort}:{tsPort} maptiler/tileserver-gl");
+            Logger.Debug("Created start.bat");
+
+            Logger.Info("**********TileServer installed**********");
             return true;
         }
 
