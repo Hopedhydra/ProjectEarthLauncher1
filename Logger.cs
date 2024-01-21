@@ -49,7 +49,7 @@ namespace ProjectEarthLauncher
                 //    Console.Write(new string(' ', Console.BufferWidth - Console.CursorLeft));
                 if ((byte)level <= (byte)Level.Error)
                 {
-                    Console.Write(new string(' ', Console.BufferWidth - Console.CursorLeft));
+                    Console.Write(new string(' ', Math.Max(0, Console.BufferWidth - (Console.CursorLeft + 2))));
                     Console.WriteLine();
                 }
                 Console.ResetColor();
