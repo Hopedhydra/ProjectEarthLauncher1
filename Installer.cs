@@ -67,7 +67,7 @@ namespace ProjectEarthLauncher
 
             // trying to install release while source is currenty installed, very bad things would probably happen
             // TODO: if this isn't repo, detect if source or release and do this check
-            if (context.Config.api.IsGitRepo && context.Api_IsReleaseNoUI() == 1)
+            if (context.Config.Api.IsGitRepo && context.Api_IsReleaseNoUI() == 1)
             {
                 Logger.PAKC("Api folder will be deleted, because current installation isn't compatible");
                 Utils.DeleteDirectory(context.ApiDir);
@@ -77,14 +77,14 @@ namespace ProjectEarthLauncher
             {
                 Directory.CreateDirectory(context.ApiDir);
                 // download and extract
-                if (context.Config.api.IsGitRepo)
+                if (context.Config.Api.IsGitRepo)
                 {
                     string tempPath = Path.Combine(context.InstallDir, "temp");
                     if (Directory.Exists(tempPath))
                         Utils.DeleteDirectory(tempPath);
                     Directory.CreateDirectory(tempPath);
 
-                    Utils.DownloadGitRepo(context.Config.api.Url, tempPath, "Api");
+                    Utils.DownloadGitRepo(context.Config.Api.Url, tempPath, "Api");
 
                     Utils.MoveFolderContents(tempPath, context.ApiDir);
 
@@ -93,7 +93,7 @@ namespace ProjectEarthLauncher
                 else
                 {
                     string apiZip = Path.Combine(context.ApiDir, "api.zip");
-                    context.DownloadFile(context.Config.api.Url, apiZip, "Api");
+                    context.DownloadFile(context.Config.Api.Url, apiZip, "Api");
 
                     context.ExtractZip(apiZip);
                 }
@@ -131,7 +131,7 @@ namespace ProjectEarthLauncher
             }
 
             // resource pack
-            context.DownloadFile("https://www.dropbox.com/scl/fi/kbyysugyhb94zj9zb6pgc/vanilla.zip?rlkey=xt6c7nhpbzzyw7gua524ssb40&dl=1", Path.Combine(dataPath, "resourcepacks", "vanilla.zip"), "Resourcepack");
+            context.DownloadFile(context.Config.ResourcepackUrl, Path.Combine(dataPath, "resourcepacks", "vanilla.zip"), "Resourcepack");
 
             // build
             if (!isRelease)
@@ -181,7 +181,7 @@ namespace ProjectEarthLauncher
 
             string cloudburstJarPath = Path.Combine(context.CloudburstDir, "cloudburst.jar");
         downloadCloudburst:
-            context.DownloadFile("https://ci.rtm516.co.uk/job/ProjectEarth/job/Server/job/earth-inventory/lastSuccessfulBuild/artifact/target/Cloudburst.jar", cloudburstJarPath, "Cloudburst");
+            context.DownloadFile(context.Config.CloudburstUrl, cloudburstJarPath, "Cloudburst");
 
             if (!new FileInfo(cloudburstJarPath).Exists || new FileInfo(cloudburstJarPath).Length < 15000 * 1024)
             {
@@ -224,8 +224,8 @@ namespace ProjectEarthLauncher
             }
             Logger.Debug("Generated Cloudburst file structure");
 
-            context.DownloadFile("https://www.googleapis.com/drive/v3/files/1DIX9pT7B460iPd8tWysi4KQCxQqwQNL8?alt=media&key=AIzaSyAA9ERw-9LZVEohRYtCWka_TQc6oXmvcVU&supportsAllDrives=True", Path.Combine(context.CloudburstDir, "plugins", "GenoaPlugin.jar"), "GenoaPlugin");
-            context.DownloadFile("https://www.googleapis.com/drive/v3/files/1m6PrdPTAl6k4k36pq44Lw-U-hDhixPwk?alt=media&key=AIzaSyAA9ERw-9LZVEohRYtCWka_TQc6oXmvcVU&supportsAllDrives=True", Path.Combine(context.CloudburstDir, "plugins", "ZGenoaAllocatorPlugin.jar"), "GenoaAllocatorPlugin");
+            context.DownloadFile(context.Config.GenoaPluginUrl, Path.Combine(context.CloudburstDir, "plugins", "GenoaPlugin.jar"), "GenoaPlugin");
+            context.DownloadFile(context.Config.GenoaAllocatorPluginUrl, Path.Combine(context.CloudburstDir, "plugins", "ZGenoaAllocatorPlugin.jar"), "GenoaAllocatorPlugin");
 
             Directory.CreateDirectory(Path.Combine(context.CloudburstDir, "plugins", "GenoaAllocatorPlugin"));
             context.WriteAllText(Path.Combine(context.CloudburstDir, "plugins", "GenoaAllocatorPlugin", "key.txt"),
@@ -284,7 +284,7 @@ namespace ProjectEarthLauncher
 
             Directory.CreateDirectory(context.TileServerDir);
 
-            Utils.DownloadGitRepo("https://github.com/SuperMatejCZ/TileServer.git", context.TileServerDir, "TileServer");
+            Utils.DownloadGitRepo(context.Config.TileServerUrl, context.TileServerDir, "TileServer");
 
             // tile server config
             string tsConfigPath = Path.Combine(context.TileServerDir, "config.json");
@@ -336,16 +336,28 @@ namespace ProjectEarthLauncher
         {
             public static readonly Config Default = new Config()
             {
-                api = new Api()
+                Api = new ApiConfig()
                 {
                     IsGitRepo = true,
                     Url = "https://github.com/jackcaver/Api.git"
-                }
+                },
+                ResourcepackUrl = "https://www.dropbox.com/scl/fi/kbyysugyhb94zj9zb6pgc/vanilla.zip?rlkey=xt6c7nhpbzzyw7gua524ssb40&dl=1",
+                CloudburstUrl = "https://ci.rtm516.co.uk/job/ProjectEarth/job/Server/job/earth-inventory/lastSuccessfulBuild/artifact/target/Cloudburst.jar",
+                GenoaPluginUrl = "https://www.googleapis.com/drive/v3/files/1DIX9pT7B460iPd8tWysi4KQCxQqwQNL8?alt=media&key=AIzaSyAA9ERw-9LZVEohRYtCWka_TQc6oXmvcVU&supportsAllDrives=True",
+                GenoaAllocatorPluginUrl = "https://www.googleapis.com/drive/v3/files/1m6PrdPTAl6k4k36pq44Lw-U-hDhixPwk?alt=media&key=AIzaSyAA9ERw-9LZVEohRYtCWka_TQc6oXmvcVU&supportsAllDrives=True",
+                TileServerUrl = "https://github.com/SuperMatejCZ/TileServer.git",
             };
 
-            public Api api { get; set; }
+            public ApiConfig Api { get; set; }
+            public string ResourcepackUrl { get; set; }
 
-            public class Api
+            public string CloudburstUrl { get; set; }
+            public string GenoaPluginUrl { get; set; }
+            public string GenoaAllocatorPluginUrl { get; set; }
+
+            public string TileServerUrl { get; set; }
+
+            public class ApiConfig
             {
                 public bool IsGitRepo { get; set; }
                 public string Url { get; set; }
