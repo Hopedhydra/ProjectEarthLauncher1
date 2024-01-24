@@ -139,7 +139,7 @@ namespace ProjectEarthLauncher
                 Logger.PAKC("Make sure you have .net 5 SDK installed");
                 Logger.Debug("Building Api...");
                 string buildScriptPath = Path.Combine(context.ApiDir, "ProjectEarthServerAPI", "build.bat");
-                context.WriteAllText(buildScriptPath, "dotnet build --nologo --property WarningLevel=0 /clp:ErrorsOnly");
+                context.WriteAllText(buildScriptPath, "dotnet build --nologo /clp:ErrorsOnly");
 
                 string commandText = File.ReadAllText(buildScriptPath);
                 Logger.Info($"Running: \"{commandText}\"");
